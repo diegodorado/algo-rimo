@@ -2,6 +2,7 @@ module Main exposing (main)
 
 import Array
 import Browser
+import Browser.Dom exposing (getViewport)
 import Browser.Events as Events
 import Element exposing (..)
 import Element.Background as Background
@@ -12,6 +13,7 @@ import Html exposing (Html)
 import Http
 import Json.Decode as Decode
 import Random
+import Task
 
 
 seed0 =
@@ -83,22 +85,41 @@ type alias Model =
     , indexes : List Int
     , status : Status
     , started : Bool
+    , width : Int
+    , height : Int
+    , device : Device
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { index = 0, status = Loading, indexes = List.repeat 14 0, started = False }
-    , Http.get
-        { url = "/src/poemas.txt"
-        , expect = Http.expectString GotText
-        }
+    ( { index = 0
+      , status = Loading
+      , indexes = List.repeat 14 0
+      , started = False
+      , width = 1280
+      , height = 768
+      , device = classifyDevice { width = 1280, height = 768 }
+      }
+    , Cmd.batch
+        [ Http.get
+            { url = "poemas.txt"
+            , expect = Http.expectString GotText
+            }
+        , Task.perform (\{ viewport } -> InitialScreenSize (round viewport.width) (round viewport.height)) getViewport
+        ]
     )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Events.onKeyDown keyDecoder
+    Sub.batch
+        [ Events.onKeyDown keyDecoder
+        , Events.onClick (Decode.succeed <| KeyboardMsg Enter)
+        , Events.onResize <|
+            \width height ->
+                Resized ( width, height, classifyDevice { width = width, height = height } )
+        ]
 
 
 keyDecoder : Decode.Decoder Msg
@@ -181,6 +202,8 @@ type Msg
     | GotText (Result Http.Error String)
     | KeyboardMsg KeyboardMsg
     | RandomIndexes (List Int)
+    | Resized ( Int, Int, Device )
+    | InitialScreenSize Int Int
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -223,6 +246,12 @@ update msg model =
                 OtherKey ->
                     ( model, Cmd.none )
 
+        Resized ( w, h, d ) ->
+            ( { model | width = w, height = h, device = d }, Cmd.none )
+
+        InitialScreenSize w h ->
+            ( { model | width = w, height = h, device = classifyDevice { width = w, height = h } }, Cmd.none )
+
 
 linePadding line =
     paddingEach
@@ -230,7 +259,7 @@ linePadding line =
         , right = 0
         , bottom =
             if List.member line [ 3, 7, 10 ] then
-                20
+                35
 
             else
                 0
@@ -265,22 +294,26 @@ mapLines fullText index indexes line =
     renderLine line idx index fullText
 
 
-renderIntro =
+renderIntro model =
     column
         [ width fill
         , centerY
         , Font.center
-        , Font.size 14
+        , responsiveFontSize model.width 4
         ]
-        [ el [ width fill, padding 30, Font.size 40 ] <| text "Algo Leo"
-        , el [ width fill, padding 5 ] <| text "Generador Algorítimo de"
-        , el [ width fill ] <| text "Sonetos Alejandrinos para Leer"
-        , el [ width fill, padding 20, Font.size 14 ] <| text "Presiona ENTER para comenzar."
-        , el [ width fill, padding 15, Font.size 40 ] <| text "↵"
-        , el [ width fill, padding 5, Font.color <| rgb 0.25 0.25 0.25, Font.center ] <|
-            text "↵ genera un nuevo soneto"
-        , el [ width fill, padding 5, Font.color <| rgb 0.25 0.25 0.25, Font.center ] <|
-            text "↑ ↓ → ← cambia los versos."
+        [ el [ width fill, padding 50, responsiveFontSize model.width 14 ] <| text "Algo Rimo"
+        , el [ width fill ] <| text "generador algorítimo de"
+        , el [ width fill, padding 20 ] <| text "sonetos alejandrinos"
+        , textColumn [ width fill, spacing 10, padding 10 ]
+            [ paragraph []
+                [ el [ responsiveFontSize model.width 10, padding 10 ] (text "⏎")
+                , el [ padding 10 ] <| text "genera un nuevo soneto"
+                ]
+            , paragraph []
+                [ el [ responsiveFontSize model.width 6, padding 20 ] (text "⇦⇧⇨⇩")
+                , text "cambia los versos"
+                ]
+            ]
         ]
 
 
@@ -288,13 +321,29 @@ renderPoems model fullText =
     column
         [ width fill
         , centerY
-        , spacing 8
+        , spacing 14
         , Font.center
         ]
     <|
         List.map
             (mapLines fullText model.index model.indexes)
             (List.range 0 13)
+
+
+responsiveFontSize : Int -> Int -> Attr decorative msg
+responsiveFontSize w m =
+    let
+        width =
+            if w > 800 then
+                800
+
+            else if w < 400 then
+                400
+
+            else
+                w
+    in
+    Font.size <| (width * m) // 100
 
 
 
@@ -307,16 +356,11 @@ view model =
         [ Background.image "bg.jpg"
         , width fill
         , height fill
+        , responsiveFontSize model.width 4
         , Font.family
             [ Font.external
-                { -- url = "https://fonts.googleapis.com/css?family=Homemade+Apple&display=swap"
-                  url = "https://fonts.googleapis.com/css?family=Beth+Ellen&display=swap"
-
-                -- url = "https://fonts.googleapis.com/css?family=Nothing+You+Could+Do&display=swap"
-                -- , name = "Homemade Apple"
+                { url = "https://fonts.googleapis.com/css?family=Beth+Ellen&display=swap"
                 , name = "Beth Ellen"
-
-                -- , name = "Nothing You Could Do"
                 }
             , Font.sansSerif
             ]
@@ -324,14 +368,14 @@ view model =
     <|
         case model.status of
             Failure ->
-                el [] <| text "Error."
+                el [ width fill, height fill ] <| text "Error. No se encuentran los poemas."
 
             Loading ->
-                el [] <| text "Loading..."
+                el [ width fill, height fill ] <| text "Cargando poemas..."
 
             Success fullText ->
                 if model.started then
                     renderPoems model fullText
 
                 else
-                    renderIntro
+                    renderIntro model
