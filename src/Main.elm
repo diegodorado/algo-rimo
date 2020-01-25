@@ -302,7 +302,7 @@ renderIntro model =
         , responsiveFontSize model.width 4
         ]
         [ el [ width fill, padding 50, responsiveFontSize model.width 14 ] <| text "Algo Rimo"
-        , el [ width fill ] <| text "generador algorítimo de"
+        , el [ width fill ] <| text "generador algorítmico de"
         , el [ width fill, padding 20 ] <| text "sonetos alejandrinos"
         , textColumn [ width fill, spacing 10, padding 10 ]
             [ paragraph []
