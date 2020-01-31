@@ -3,12 +3,12 @@
 set -e
 
 js="dist/elm.js"
-min="dist/elm.min.js"
+min="dist/assets/js/elm.min.js"
 
 mkdir -p dist
 rm -rf dist/*
 cp index.html dist/
-sed -i 's/elm\.js/elm\.min\.js/g' dist/index.html
+sed -i 's/elm\.js/assets\/js\/elm\.min\.js/g' dist/index.html
 cp favicon.ico dist/
 cp -R assets dist/
 
