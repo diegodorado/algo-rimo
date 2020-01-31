@@ -1,17 +1,58 @@
 <!DOCTYPE HTML>
 <html>
+
 <head>
   <meta charset="UTF-8">
   <title>Algo Rimo</title>
-  <script src="elm.min.js"></script>
+  <script src="elm.js"></script>
+  <script src="assets/js/howler.min.js"></script>
   <link rel="shortcut icon" href="favicon.ico">
 </head>
+
 <body>
   <div id="elm"></div>
   <script>
-  var app = Elm.Main.init({
-    node: document.getElementById('elm')
-  });
+    const sounds = {
+      change: [
+        new Howl({
+          src: ['assets/audio/change1.webm']
+        }),
+        new Howl({
+          src: ['assets/audio/change2.webm']
+        })
+      ],
+      select: [
+        new Howl({
+          src: ['assets/audio/select1.webm']
+        }),
+        new Howl({
+          src: ['assets/audio/select2.webm']
+        })
+      ],
+      random: [
+        new Howl({
+          src: ['assets/audio/random1.webm']
+        }),
+        new Howl({
+          src: ['assets/audio/random2.webm']
+        })
+      ]
+    }
+
+    const playSound = (name) => {
+      const items = sounds[name]
+      console.assert(items != null, `Unknown sound: ${name}`)
+      const item = items[Math.floor(Math.random() * items.length)]
+      item.rate(0.5 + Math.random()*1.5)
+      item.play()
+    };
+
+    const app = Elm.Main.init({
+      node: document.getElementById('elm')
+    })
+
+    app.ports.playSound.subscribe(sound => playSound(sound))
   </script>
 </body>
+
 </html>

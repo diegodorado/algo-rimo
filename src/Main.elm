@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main, playSound)
 
 import Array
 import Browser
@@ -14,6 +14,9 @@ import Http
 import Json.Decode as Decode
 import Random
 import Task
+
+
+port playSound : String -> Cmd msg
 
 
 seed0 =
@@ -103,7 +106,7 @@ init _ =
       }
     , Cmd.batch
         [ Http.get
-            { url = "poemas.txt"
+            { url = "assets/poemas.txt"
             , expect = Http.expectString GotText
             }
         , Task.perform (\{ viewport } -> InitialScreenSize (round viewport.width) (round viewport.height)) getViewport
@@ -165,7 +168,7 @@ nextPoemLine model line =
         idxs =
             List.indexedMap incr model.indexes
     in
-    ( { model | indexes = idxs }, Cmd.none )
+    ( { model | indexes = idxs }, playSound "change" )
 
 
 prevPoemLine model line =
@@ -180,7 +183,7 @@ prevPoemLine model line =
         idxs =
             List.indexedMap decr model.indexes
     in
-    ( { model | indexes = idxs }, Cmd.none )
+    ( { model | indexes = idxs }, playSound "change" )
 
 
 
@@ -235,13 +238,18 @@ update msg model =
                     nextPoemLine model model.index
 
                 ArrowUp ->
-                    ( { model | index = modBy 14 (model.index - 1) }, Cmd.none )
+                    ( { model | index = modBy 14 (model.index - 1) }, playSound "select" )
 
                 ArrowDown ->
-                    ( { model | index = modBy 14 (model.index + 1) }, Cmd.none )
+                    ( { model | index = modBy 14 (model.index + 1) }, playSound "select" )
 
                 Enter ->
-                    ( { model | started = True }, Random.generate RandomIndexes (Random.list 14 (Random.int 0 9)) )
+                    ( { model | started = True }
+                    , Cmd.batch
+                        [ Random.generate RandomIndexes (Random.list 14 (Random.int 0 9))
+                        , playSound "random"
+                        ]
+                    )
 
                 OtherKey ->
                     ( model, Cmd.none )
@@ -267,31 +275,46 @@ linePadding line =
         }
 
 
-renderLine line idx curr fulltext =
-    let
-        fc =
-            if line == curr then
-                Font.bold
+responsiveLinePadding : Int -> Int -> Float -> Int -> Attribute msg
+responsiveLinePadding w h m line =
+    paddingEach
+        { top = 0
+        , right = 0
+        , bottom =
+            if List.member line [ 3, 7, 10 ] then
+                round <| (m * toFloat w + m * toFloat h) / 100
 
             else
-                Font.regular
+                0
+        , left = 0
+        }
+
+
+renderLine line idx model fulltext =
+    let
+        fc =
+            if line == model.index then
+                Font.color (rgb 0.0 0.7 0.7)
+
+            else
+                Font.color (rgb 0 0 0)
     in
-    row [ width fill, linePadding line ]
+    row [ width fill ]
         [ el
-            [ Font.color (rgb 0 0 0)
-            , fc
+            [ fc
             , width fill
+            , responsiveLinePadding model.width model.height 1.5 line
             ]
             (text (getLine line idx fulltext))
         ]
 
 
-mapLines fullText index indexes line =
+mapLines model fullText line =
     let
         idx =
-            Maybe.withDefault 0 <| Array.get line <| Array.fromList <| indexes
+            Maybe.withDefault 0 <| Array.get line <| Array.fromList <| model.indexes
     in
-    renderLine line idx index fullText
+    renderLine line idx model fullText
 
 
 renderIntro model =
@@ -299,19 +322,37 @@ renderIntro model =
         [ width fill
         , centerY
         , Font.center
-        , responsiveFontSize model.width 4
+        , responsiveFontSize model.width model.height 1.2
         ]
-        [ el [ width fill, padding 50, responsiveFontSize model.width 14 ] <| text "Algo Rimo"
-        , el [ width fill ] <| text "generador algorítmico de"
-        , el [ width fill, padding 20 ] <| text "sonetos alejandrinos"
-        , textColumn [ width fill, spacing 10, padding 10 ]
-            [ paragraph []
-                [ el [ responsiveFontSize model.width 10, padding 10 ] (text "⏎")
-                , el [ padding 10 ] <| text "genera un nuevo soneto"
+        [ el [ centerX, padding 50, responsiveFontSize model.width model.height 6 ] <| text "Algo Rimo"
+        , el [ centerX ] <| text "generador algorítmico de"
+        , el [ centerX, padding 20 ] <| text "sonetos alejandrinos"
+        , el [ padding 20 ] none
+        , column
+            [ centerX
+            , responsiveFontSize model.width model.height 0.8
+            , Font.family
+                [ Font.typeface "Courier"
+                , Font.sansSerif
                 ]
-            , paragraph []
-                [ el [ responsiveFontSize model.width 6, padding 20 ] (text "⇦⇧⇨⇩")
-                , text "cambia los versos"
+            , padding 20
+            , spacing 15
+            , Border.dashed
+            , Border.width 2
+            ]
+            [ row [ centerX, spacing 15 ]
+                [ image [ width <| px 55 ]
+                    { src = "assets/svg/enter-key.svg"
+                    , description = "enter"
+                    }
+                , el [ alignBottom ] <| text "genera un nuevo soneto"
+                ]
+            , row [ centerX, spacing 15 ]
+                [ image [ width <| px 100 ]
+                    { src = "assets/svg/arrow-keys.svg"
+                    , description = "enter"
+                    }
+                , el [ alignBottom, padding 10 ] <| text "cambia los versos"
                 ]
             ]
         ]
@@ -321,29 +362,18 @@ renderPoems model fullText =
     column
         [ width fill
         , centerY
-        , spacing 14
+        , spacing 10
         , Font.center
         ]
     <|
         List.map
-            (mapLines fullText model.index model.indexes)
+            (mapLines model fullText)
             (List.range 0 13)
 
 
-responsiveFontSize : Int -> Int -> Attr decorative msg
-responsiveFontSize w m =
-    let
-        width =
-            if w > 800 then
-                800
-
-            else if w < 400 then
-                400
-
-            else
-                w
-    in
-    Font.size <| (width * m) // 100
+responsiveFontSize : Int -> Int -> Float -> Attr decorative msg
+responsiveFontSize w h m =
+    Font.size <| round <| (m * toFloat w + m * toFloat h) / 100
 
 
 
@@ -353,10 +383,10 @@ responsiveFontSize w m =
 view : Model -> Html Msg
 view model =
     Element.layout
-        [ Background.image "bg.jpg"
+        [ Background.image "assets/img/bg.jpg"
         , width fill
         , height fill
-        , responsiveFontSize model.width 4
+        , responsiveFontSize model.width model.height 1.2
         , Font.family
             [ Font.external
                 { url = "https://fonts.googleapis.com/css?family=Beth+Ellen&display=swap"
