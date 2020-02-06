@@ -7,6 +7,13 @@
   <script src="elm.js"></script>
   <script src="assets/js/howler.min.js"></script>
   <link rel="shortcut icon" href="favicon.ico">
+  <style>
+    *{user-select: none;}
+    *:focus {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  </style>
 </head>
 
 <body>
@@ -43,7 +50,7 @@
       const items = sounds[name]
       console.assert(items != null, `Unknown sound: ${name}`)
       const item = items[Math.floor(Math.random() * items.length)]
-      item.rate(0.5 + Math.random()*1.5)
+      item.rate(0.5 + Math.random() * 1.5)
       item.play()
     };
 

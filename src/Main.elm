@@ -19,6 +19,19 @@ import Task
 port playSound : String -> Cmd msg
 
 
+
+-- port wrapper
+
+
+playClip : String -> Model -> Cmd msg
+playClip clip model =
+    if model.started && model.soundOn then
+        playSound clip
+
+    else
+        Cmd.none
+
+
 seed0 =
     Random.initialSeed 31415
 
@@ -91,6 +104,7 @@ type alias Model =
     , width : Int
     , height : Int
     , device : Device
+    , soundOn : Bool
     }
 
 
@@ -100,6 +114,7 @@ init _ =
       , status = Loading
       , indexes = List.repeat 14 0
       , started = False
+      , soundOn = True
       , width = 1280
       , height = 768
       , device = classifyDevice { width = 1280, height = 768 }
@@ -118,7 +133,6 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Events.onKeyDown keyDecoder
-        , Events.onClick (Decode.succeed <| KeyboardMsg Enter)
         , Events.onResize <|
             \width height ->
                 Resized ( width, height, classifyDevice { width = width, height = height } )
@@ -149,6 +163,18 @@ toDirection string =
         "ArrowDown" ->
             ArrowDown
 
+        "a" ->
+            ArrowLeft
+
+        "d" ->
+            ArrowRight
+
+        "w" ->
+            ArrowUp
+
+        "s" ->
+            ArrowDown
+
         "Enter" ->
             Enter
 
@@ -156,34 +182,38 @@ toDirection string =
             OtherKey
 
 
-nextPoemLine model line =
+changeIndexes indexes line next =
     let
-        incr l idx =
+        change l idx =
             if l == line then
-                modBy 10 (idx + 1)
+                modBy 10
+                    (if next then
+                        idx + 1
+
+                     else
+                        idx - 1
+                    )
 
             else
                 idx
-
-        idxs =
-            List.indexedMap incr model.indexes
     in
-    ( { model | indexes = idxs }, playSound "change" )
+    List.indexedMap change indexes
+
+
+nextPoemLine model line =
+    let
+        idxs =
+            changeIndexes model.indexes line True
+    in
+    ( { model | indexes = idxs }, playClip "change" model )
 
 
 prevPoemLine model line =
     let
-        decr l idx =
-            if l == line then
-                modBy 10 (idx - 1)
-
-            else
-                idx
-
         idxs =
-            List.indexedMap decr model.indexes
+            changeIndexes model.indexes line False
     in
-    ( { model | indexes = idxs }, playSound "change" )
+    ( { model | indexes = idxs }, playClip "change" model )
 
 
 
@@ -202,8 +232,10 @@ type KeyboardMsg
 type Msg
     = Increment Int
     | Decrement Int
+    | ChangeLine Int
     | GotText (Result Http.Error String)
     | KeyboardMsg KeyboardMsg
+    | ToggleSound
     | RandomIndexes (List Int)
     | Resized ( Int, Int, Device )
     | InitialScreenSize Int Int
@@ -226,8 +258,18 @@ update msg model =
         Decrement line ->
             prevPoemLine model line
 
+        ChangeLine line ->
+            let
+                idxs =
+                    changeIndexes model.indexes line False
+            in
+            ( { model | indexes = idxs, index = line }, playClip "change" model )
+
         RandomIndexes idxs ->
             ( { model | indexes = idxs }, Cmd.none )
+
+        ToggleSound ->
+            ( { model | soundOn = not model.soundOn }, Cmd.none )
 
         KeyboardMsg key ->
             case key of
@@ -238,16 +280,16 @@ update msg model =
                     nextPoemLine model model.index
 
                 ArrowUp ->
-                    ( { model | index = modBy 14 (model.index - 1) }, playSound "select" )
+                    ( { model | index = modBy 14 (model.index - 1) }, playClip "select" model )
 
                 ArrowDown ->
-                    ( { model | index = modBy 14 (model.index + 1) }, playSound "select" )
+                    ( { model | index = modBy 14 (model.index + 1) }, playClip "select" model )
 
                 Enter ->
                     ( { model | started = True }
                     , Cmd.batch
                         [ Random.generate RandomIndexes (Random.list 14 (Random.int 0 9))
-                        , playSound "random"
+                        , playClip "random" model
                         ]
                     )
 
@@ -300,12 +342,14 @@ renderLine line idx model fulltext =
                 Font.color (rgb 0 0 0)
     in
     row [ width fill ]
-        [ el
+        [ Input.button
             [ fc
             , width fill
-            , responsiveLinePadding model.width model.height 1.5 line
+            , responsiveLinePadding model.width model.height 1.3 line
             ]
-            (text (getLine line idx fulltext))
+            { onPress = Just <| ChangeLine line
+            , label = text (getLine line idx fulltext)
+            }
         ]
 
 
@@ -322,39 +366,47 @@ renderIntro model =
         [ width fill
         , centerY
         , Font.center
-        , responsiveFontSize model.width model.height 1.2
+        , spacing 20
         ]
-        [ el [ centerX, padding 50, responsiveFontSize model.width model.height 6 ] <| text "Algo Rimo"
-        , el [ centerX ] <| text "generador algorítmico de"
-        , el [ centerX, padding 20 ] <| text "sonetos alejandrinos"
-        , el [ padding 20 ] none
+        [ el [ centerX, padding 20, responsiveFontSize model.width model.height 6 ] <| text "Algo Rimo"
+        , el
+            [ centerX
+            , padding 10
+            , responsiveFontSize model.width model.height 1.4
+            ]
+          <|
+            text "Sonetos generados algorítmicamente"
         , column
             [ centerX
-            , responsiveFontSize model.width model.height 0.8
+            , responsiveFontSize model.width model.height 1
             , Font.family
                 [ Font.typeface "Courier"
                 , Font.sansSerif
                 ]
-            , padding 20
+            , padding 15
             , spacing 15
             , Border.dashed
             , Border.width 2
             ]
-            [ row [ centerX, spacing 15 ]
-                [ image [ width <| px 55 ]
+            [ row [ width fill, centerX, spacing 15 ]
+                [ image [ width <| px 90 ]
                     { src = "assets/svg/enter-key.svg"
                     , description = "enter"
                     }
                 , el [ alignBottom ] <| text "genera un nuevo soneto"
                 ]
-            , row [ centerX, spacing 15 ]
+            , row [ width fill, centerX, spacing 15 ]
                 [ image [ width <| px 100 ]
-                    { src = "assets/svg/arrow-keys.svg"
+                    { src = "assets/svg/wasd-keys.svg"
                     , description = "enter"
                     }
                 , el [ alignBottom, padding 10 ] <| text "cambia los versos"
                 ]
             ]
+        , Input.button [ Border.rounded 20, Background.color <| rgb 0 0 0, Font.color (rgb 1 1 1), centerX, padding 20, responsiveFontSize model.width model.height 2.5 ]
+            { onPress = Just <| KeyboardMsg Enter
+            , label = text "Jugar"
+            }
         ]
 
 
@@ -362,13 +414,34 @@ renderPoems model fullText =
     column
         [ width fill
         , centerY
-        , spacing 10
+        , spacing 8
         , Font.center
         ]
     <|
         List.map
             (mapLines model fullText)
             (List.range 0 13)
+
+
+renderSoundCtrl on =
+    Input.button [ padding 20, alignTop ]
+        { onPress = Just ToggleSound
+        , label =
+            image
+                [ width <| px 30 ]
+                { src =
+                    String.concat
+                        [ "assets/svg/sound-"
+                        , if on then
+                            "on"
+
+                          else
+                            "off"
+                        , ".svg"
+                        ]
+                , description = "enter"
+                }
+        }
 
 
 responsiveFontSize : Int -> Int -> Float -> Attr decorative msg
@@ -404,8 +477,15 @@ view model =
                 el [ width fill, height fill ] <| text "Cargando poemas..."
 
             Success fullText ->
-                if model.started then
-                    renderPoems model fullText
+                row
+                    [ width fill
+                    , height fill
+                    ]
+                    [ el [ padding 20 ] <| el [ width <| px 30, height <| px 30 ] none
+                    , if model.started then
+                        renderPoems model fullText
 
-                else
-                    renderIntro model
+                      else
+                        renderIntro model
+                    , renderSoundCtrl model.soundOn
+                    ]
