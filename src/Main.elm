@@ -17,17 +17,35 @@ import Random
 import Task
 
 
-port playSound : String -> Cmd msg
+port playSound : ( Int, String ) -> Cmd msg
 
 
 
 -- port wrapper
 
 
-playClip : String -> Model -> Cmd msg
+type SoundClip
+    = ChangeSound
+    | SelectSound
+    | RandomSound
+
+
+playClip : SoundClip -> Model -> Cmd msg
 playClip clip model =
+    let
+        s =
+            case clip of
+                ChangeSound ->
+                    "change"
+
+                SelectSound ->
+                    "select"
+
+                RandomSound ->
+                    "random"
+    in
     if model.soundOn then
-        playSound clip
+        playSound ( themedIndex model.theme, s )
 
     else
         Cmd.none
@@ -226,7 +244,7 @@ nextPoemLine model line =
         idxs =
             changeIndexes model.indexes line True
     in
-    ( { model | indexes = idxs }, playClip "change" model )
+    ( { model | indexes = idxs }, playClip ChangeSound model )
 
 
 prevPoemLine model line =
@@ -234,7 +252,7 @@ prevPoemLine model line =
         idxs =
             changeIndexes model.indexes line False
     in
-    ( { model | indexes = idxs }, playClip "change" model )
+    ( { model | indexes = idxs }, playClip ChangeSound model )
 
 
 
@@ -287,7 +305,7 @@ update msg model =
                 idxs =
                     changeIndexes model.indexes line False
             in
-            ( { model | indexes = idxs, index = line }, playClip "change" model )
+            ( { model | indexes = idxs, index = line }, playClip ChangeSound model )
 
         RandomIndexes idxs ->
             ( { model | indexes = idxs }, Cmd.none )
@@ -321,16 +339,16 @@ update msg model =
                     nextPoemLine model model.index
 
                 ArrowUp ->
-                    ( { model | index = modBy 14 (model.index - 1) }, playClip "select" model )
+                    ( { model | index = modBy 14 (model.index - 1) }, playClip SelectSound model )
 
                 ArrowDown ->
-                    ( { model | index = modBy 14 (model.index + 1) }, playClip "select" model )
+                    ( { model | index = modBy 14 (model.index + 1) }, playClip SelectSound model )
 
                 SpaceBar ->
                     ( { model | page = Game }
                     , Cmd.batch
                         [ Random.generate RandomIndexes (Random.list 14 (Random.int 0 9))
-                        , playClip "random" model
+                        , playClip RandomSound model
                         ]
                     )
 
@@ -358,21 +376,6 @@ linePadding line =
         }
 
 
-responsiveLinePadding : Int -> Int -> Float -> Int -> Attribute msg
-responsiveLinePadding w h m line =
-    paddingEach
-        { top = 0
-        , right = 0
-        , bottom =
-            if List.member line [ 3, 7, 10 ] then
-                round <| (m * toFloat w + m * toFloat h) / 100
-
-            else
-                0
-        , left = 0
-        }
-
-
 renderLine line idx model fulltext =
     let
         fc =
@@ -387,7 +390,7 @@ renderLine line idx model fulltext =
         [ Input.button
             [ fc
             , width fill
-            , responsiveLinePadding model.width model.height 1.75 line
+            , responsiveLinePadding model 1.75 line
             ]
             { onPress = Just <| ChangeLine line
             , label = text (getLine line idx fulltext)
@@ -417,7 +420,12 @@ keyBox model t s =
     el
         [ width <| px w
         , height <| px 40
-        , Border.rounded 5
+        , Border.rounded <|
+            if model.theme == Computer then
+                0
+
+            else
+                5
         , Font.bold
         , Background.color <| themedFg model.theme Primary
         , Font.color <| themedFg model.theme Contrast
@@ -449,14 +457,14 @@ spaceKey model =
         [ spacing 5
         ]
     <|
-        keyBox model "SPACE" <|
+        keyBox model "ESPACIO" <|
             Just 130
 
 
 renderIntro model =
     let
         roboto =
-            Font.family [ Font.typeface "Roboto", Font.sansSerif ]
+            themedFontAlt model.theme
     in
     column
         [ width fill
@@ -465,17 +473,17 @@ renderIntro model =
         , Font.color <| themedFg model.theme Primary
         , spacing 20
         ]
-        [ el [ centerX, padding 20, responsiveFontSize model.width model.height 6 ] <| text "Algo Rimo"
+        [ el [ centerX, padding 20, responsiveFontSize model 5 ] <| text "Algo Rimo"
         , el
             [ centerX
             , padding 10
-            , responsiveFontSize model.width model.height 1.4
+            , responsiveFontSize model 1.4
             ]
           <|
             text "Sonetos generados algorítmicamente"
         , column
             [ centerX
-            , responsiveFontSize model.width model.height 1.4
+            , responsiveFontSize model 1.4
             , padding 15
             , spacing 15
             , roboto
@@ -491,7 +499,19 @@ renderIntro model =
                 , el [ alignBottom, padding 10 ] <| text "cambia los versos"
                 ]
             ]
-        , Input.button [ Border.rounded 20, Background.color <| themedFg model.theme Primary, Font.color <| themedFg model.theme Contrast, centerX, padding 20, responsiveFontSize model.width model.height 2.5 ]
+        , Input.button
+            [ Border.rounded <|
+                if model.theme == Computer then
+                    0
+
+                else
+                    20
+            , Background.color <| themedFg model.theme Primary
+            , Font.color <| themedFg model.theme Contrast
+            , centerX
+            , padding 20
+            , responsiveFontSize model 2.5
+            ]
             { onPress = Just <| KeyboardMsg SpaceBar
             , label = text "Jugar"
             }
@@ -506,15 +526,12 @@ renderInfo model =
         , Font.justify
         , padding 20
         ]
-        [ el [ centerX, padding 20, responsiveFontSize model.width model.height 3 ] <| text "Algo Rimo"
+        [ el [ centerX, padding 20, responsiveFontSize model 3 ] <| text "Algo Rimo"
         , column
             [ centerX
             , paddingXY 60 20
-            , responsiveFontSize model.width model.height 1.2
-            , Font.family
-                [ Font.typeface "Roboto"
-                , Font.sansSerif
-                ]
+            , responsiveFontSize model 1.2
+            , themedFontAlt model.theme
             , spacing 20
             ]
             [ paragraph
@@ -528,25 +545,31 @@ renderInfo model =
             , paragraph
                 []
                 [ el [ alignLeft, Font.center ] <| text "Quien lee tiene dos caminos:" ]
-            , paragraph
-                []
-                [ el [] <| text " • leer un "
-                , el [ Font.bold ] (text "soneto generado algorítmicamente")
-                , el [] <| text " (con versos seleccionados por la aplicación) y disfrutar de una composición producto del azar, como quien arroja un dado y espera ver qué le ha tocado en suerte;"
+            , row [ spacing 10 ]
+                [ el [ alignTop, width <| px 30 ] <| text " • "
+                , paragraph
+                    []
+                    [ el [] <| text "leer un "
+                    , el [ Font.bold ] (text "soneto generado algorítmicamente")
+                    , el [] <| text " (con versos seleccionados por la aplicación) y disfrutar de una composición producto del azar, como quien arroja un dado y espera ver qué le ha tocado en suerte;"
+                    ]
                 ]
-            , paragraph
-                []
-                [ el [] <| text " • generar un "
-                , el [ Font.bold ] (text "soneto personalizado")
-                , el [] <| text ", seleccionando cada uno de sus catorce versos (el algoritmo propone y quien lee dispone). En PC, la selección se realiza con las teclas "
-                , el [ Font.bold ] <| text "W"
-                , el [] <| text " (subir), "
-                , el [ Font.bold ] <| text "S"
-                , el [] <| text " (bajar), "
-                , el [ Font.bold ] <| text "A"
-                , el [] <| text "  (izquierda) y "
-                , el [ Font.bold ] <| text "D"
-                , el [] <| text " (derecha) y, desde un dispositivo móvil, tocando el verso que se quiere cambiar."
+            , row [ spacing 10 ]
+                [ el [ alignTop, width <| px 30 ] <| text " • "
+                , paragraph
+                    []
+                    [ el [] <| text "generar un "
+                    , el [ Font.bold ] (text "soneto personalizado")
+                    , el [] <| text ", seleccionando cada uno de sus catorce versos (el algoritmo propone y quien lee dispone). En PC, la selección se realiza con las teclas "
+                    , el [ Font.bold ] <| text "W"
+                    , el [] <| text " (subir), "
+                    , el [ Font.bold ] <| text "S"
+                    , el [] <| text " (bajar), "
+                    , el [ Font.bold ] <| text "A"
+                    , el [] <| text "  (izquierda) y "
+                    , el [ Font.bold ] <| text "D"
+                    , el [] <| text " (derecha) y, desde un dispositivo móvil, tocando el verso que se quiere cambiar."
+                    ]
                 ]
             , paragraph
                 []
@@ -568,23 +591,30 @@ renderInfo model =
                 [ text "¿Es posible enseñarle a una máquina a escribir poesía? ¿Hay revelación en un soneto generado al azar? ¿Puede un algoritmo ser tan creativo como una persona de carne y hueso? Estas son algunas de las preguntas que, en la actualidad, se están haciendo investigadores del campo de la inteligencia artificial y de las letras. Preguntas que Algo Rimo busca avivar."
                 ]
             ]
-        , Input.button [ Border.rounded 20, Background.color <| themedFg model.theme Primary, Font.color <| themedFg model.theme Contrast, centerX, padding 20, responsiveFontSize model.width model.height 2 ]
+        , Input.button
+            [ Border.rounded <|
+                if model.theme == Computer then
+                    0
+
+                else
+                    20
+            , Background.color <| themedFg model.theme Primary
+            , Font.color <| themedFg model.theme Contrast
+            , centerX
+            , padding 20
+            , responsiveFontSize model 2
+            ]
             { onPress = Just <| KeyboardMsg SpaceBar
             , label = text "Jugar"
             }
         ]
 
 
-responsiveSpacing : Int -> Int -> Float -> Attribute msg
-responsiveSpacing w h m =
-    spacing <| round <| (m * toFloat h / toFloat w)
-
-
 renderPoems model fullText =
     column
         [ width fill
         , centerY
-        , responsiveSpacing model.width model.height 20
+        , responsiveSpacing model 20
         , Font.center
         ]
     <|
@@ -632,9 +662,75 @@ faIcon icon =
     html (Html.i [ Html.Attributes.class <| String.concat [ "fas fa-", icon ] ] [])
 
 
-responsiveFontSize : Int -> Int -> Float -> Attr decorative msg
-responsiveFontSize w h m =
-    Font.size <| round <| (m * toFloat (min maxWidth w) + m * toFloat h) / 100
+responsiveLinePadding : Model -> Float -> Int -> Attribute msg
+responsiveLinePadding model m line =
+    let
+        w =
+            model.width
+
+        h =
+            model.height
+
+        c =
+            if model.theme == HandWriting then
+                1
+
+            else
+                0
+    in
+    paddingEach
+        { top = 0
+        , right = 0
+        , bottom =
+            if List.member line [ 3, 7, 10 ] then
+                round <| (c * m * toFloat w + m * toFloat h) / 100
+
+            else
+                0
+        , left = 0
+        }
+
+
+responsiveSpacing : Model -> Float -> Attribute msg
+responsiveSpacing model m =
+    let
+        w =
+            model.width
+
+        h =
+            model.height
+
+        c =
+            if model.theme == HandWriting then
+                1
+
+            else
+                0.5
+    in
+    spacing <| round <| (c * m * toFloat h / toFloat w)
+
+
+responsiveFontSize : Model -> Float -> Attr decorative msg
+responsiveFontSize model m =
+    let
+        w =
+            model.width
+
+        h =
+            model.height
+
+        c =
+            case model.theme of
+                HandWriting ->
+                    1
+
+                Computer ->
+                    1.5
+
+                Book ->
+                    1.7
+    in
+    Font.size <| round <| (c * m * toFloat (min maxWidth w) + m * toFloat h) / 100
 
 
 
@@ -661,13 +757,7 @@ themedFont theme =
                 ]
 
         Computer ->
-            Font.family
-                [ Font.external
-                    { url = "https://fonts.googleapis.com/css?family=VT323&display=swap"
-                    , name = "VT323"
-                    }
-                , Font.sansSerif
-                ]
+            Font.family [ Font.typeface "Pixelated", Font.monospace ]
 
         Book ->
             Font.family
@@ -679,6 +769,18 @@ themedFont theme =
                 ]
 
 
+themedFontAlt theme =
+    case theme of
+        HandWriting ->
+            Font.family [ Font.typeface "Roboto", Font.sansSerif ]
+
+        Computer ->
+            themedFont theme
+
+        Book ->
+            themedFont theme
+
+
 themedBg theme =
     case theme of
         HandWriting ->
@@ -688,7 +790,18 @@ themedBg theme =
             Background.color <| rgb 0 0 0
 
         Book ->
-            Background.color <| rgb 1 1 1
+            Background.gradient
+                { angle = 45
+                , steps =
+                    [ rgb255 253
+                        252
+                        251
+                    , rgb255
+                        226
+                        209
+                        195
+                    ]
+                }
 
 
 themedFg theme col =
@@ -699,7 +812,7 @@ themedFg theme col =
                     rgb 0 0 0
 
                 Secondary ->
-                    rgb 0 1 0
+                    rgb 0 0.5 0.5
 
                 Contrast ->
                     rgb 1 1 1
@@ -721,10 +834,22 @@ themedFg theme col =
                     rgb 0 0 0
 
                 Secondary ->
-                    rgb 0 1 0
+                    rgb 0 0 1
 
                 Contrast ->
                     rgb 1 1 1
+
+
+themedIndex theme =
+    case theme of
+        HandWriting ->
+            0
+
+        Computer ->
+            1
+
+        Book ->
+            2
 
 
 view : Model -> Html Msg
@@ -732,7 +857,7 @@ view model =
     Element.layout
         [ themedBg model.theme
         , width fill
-        , responsiveFontSize model.width model.height 1.2
+        , responsiveFontSize model 1.2
         , themedFont model.theme
         , inFront <| renderMenu model
         ]
@@ -740,7 +865,7 @@ view model =
         el
             [ centerX
             , centerY
-            , width (fill |> maximum maxWidth)
+            , width fill
 
             -- , height (fill |> maximum maxHeight)
             , paddingXY 0 30

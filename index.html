@@ -14,44 +14,112 @@
       outline: none !important;
       box-shadow: none !important;
     }
+
+    @font-face {
+        font-family: 'Pixelated';
+        src: url('assets/fonts/sfpixelate-webfont.woff2') format('woff2'),
+             url('assets/fonts/sfpixelate-webfont.woff') format('woff');
+        font-weight: normal;
+        font-style: normal;
+
+    }
+    @font-face {
+        font-family: 'Pixelated';
+        src: url('assets/fonts/sfpixelate-bold-webfont.woff2') format('woff2'),
+             url('assets/fonts/sfpixelate-bold-webfont.woff') format('woff');
+        font-weight: bold;
+        font-style: normal;
+
+    }
+
+
   </style>
 </head>
 
 <body>
   <div id="elm"></div>
   <script>
-    const sounds = {
-      change: [
-        new Howl({
-          src: ['assets/audio/change1.webm']
-        }),
-        new Howl({
-          src: ['assets/audio/change2.webm']
-        })
-      ],
-      select: [
-        new Howl({
-          src: ['assets/audio/select1.webm']
-        }),
-        new Howl({
-          src: ['assets/audio/select2.webm']
-        })
-      ],
-      random: [
-        new Howl({
-          src: ['assets/audio/random1.webm']
-        }),
-        new Howl({
-          src: ['assets/audio/random2.webm']
-        })
-      ]
-    }
+    const sounds =[
+      {
+        change: [
+          new Howl({
+            src: ['assets/audio/handwriting/change1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/handwriting/change2.webm']
+          })
+        ],
+        select: [
+          new Howl({
+            src: ['assets/audio/handwriting/select1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/handwriting/select2.webm']
+          })
+        ],
+        random: [
+          new Howl({
+            src: ['assets/audio/handwriting/random1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/handwriting/random2.webm']
+          })
+        ]
+      },
+      {
+        change: [
+          new Howl({
+            src: ['assets/audio/computer/change1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/computer/change2.webm']
+          }),
+        ],
+        select: [
+          new Howl({
+            src: ['assets/audio/computer/select1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/computer/select2.webm']
+          }),
+        ],
+        random: [
+          new Howl({
+            src: ['assets/audio/computer/random1.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/computer/random2.webm']
+          }),
+          new Howl({
+            src: ['assets/audio/computer/random3.webm']
+          }),
+        ]
+      },
+      {
+        change: [
+          new Howl({
+            src: ['assets/audio/book/change1.webm']
+          }),
+        ],
+        select: [
+          new Howl({
+            src: ['assets/audio/book/select1.webm']
+          }),
+        ],
+        random: [
+          new Howl({
+            src: ['assets/audio/book/random1.webm']
+          }),
+        ]
+      },
+    ]
 
-    const playSound = (name) => {
-      const items = sounds[name]
+    const playSound = ([theme, name]) => {
+      const items = sounds[theme][name]
       console.assert(items != null, `Unknown sound: ${name}`)
       const item = items[Math.floor(Math.random() * items.length)]
-      item.rate(0.5 + Math.random() * 1.5)
+      const rate = theme ==1 ? 1 : 0.5 + Math.random() * 1.5
+      item.rate(rate)
       item.play()
     };
 
